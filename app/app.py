@@ -7,29 +7,57 @@ from .metrics import metrics
 from .store import store
 from .services import service
 from .services.auth_service import auth_service
+from app.store.database.postgres import postgres
+from app.store.database.redis import redis
+from app.balance_loader import nginx
 from .models import models
 
 class Application:
     def __init__(self):
         self.duration = 60
         self.metrics_collector = metrics.MetricsCollector()
-        self.store = store.Store()
-        self.auth_service = auth_service.AuthService("AuthService", db = self.redis, base_latency=0.05)
-        self.services = [
-            self.auth_service,
-            service.Service("PaymentService", db=self.postgres, base_latency=0.1, requires_auth=True),
-            service.Service("DataService", db=self.postgres, cache=self.redis, base_latency=0.07, requires_auth=True),
-            service.Service("PublicInfoService", base_latency=0.03, requires_auth=False)
+        self.auth_service = auth_service.AuthService("AuthService", db = redis.Redis(name="AuthRedis"), base_latency=0.05)
+        self.load_balancer = nginx.Nginx()
+
+        payment_instances = [
+            service.Service(
+                "PaymentService",
+                db=postgres.PostgresDB(name=f"PaymentPostgres{i}"),
+                base_latency=0.1,
+                requires_auth=True
+            ) for i in range(3)  
+        ]
+        data_instances = [
+            service.Service(
+                "DataService",
+                db=postgres.PostgresDB(name=f"DataPostgres{i}"),
+                cache=redis.Redis(name=f"CacheRedis{i}"),
+                base_latency=0.07,
+                requires_auth=True
+            ) for i in range(2) 
+        ]
+        public_instances = [
+            service.Service(
+                "PublicInfoService",
+                db=postgres.PostgresDB(name=f"PublicPostgres{i}"),
+                base_latency=0.03,
+                requires_auth=False
+            ) for i in range(2)
         ]
 
-    @property
-    def postgres(self):
-        return self.store.postgres
+        self.load_balancer.add_instances("PaymentService", payment_instances)
+        self.load_balancer.add_instances("DataService", data_instances)
+        self.load_balancer.add_instances("PublicInfoService", public_instances)
+        
 
-    @property
-    def redis(self):
-        return self.store.redis
-    
+        self.services = [self.auth_service] + payment_instances + data_instances + public_instances
+        self.resources = []
+        for s in self.services:
+            if hasattr(s, 'db') and s.db is not None:
+                self.resources.append(s.db)
+            if hasattr(s, 'cache') and s.cache is not None:
+                self.resources.append(s.cache)
+
     async def generate_requests(self):
         user_id = 0
         start_time = time.time()
@@ -47,9 +75,14 @@ class Application:
                 auth_req.end_time = time.time()
                 self.metrics_collector.record(auth_req)
 
-            service = random.choice(self.services[1:])
-            req = models.Request(user, service.name)
-            asyncio.create_task(self.process_request(req, service))
+            service_name = random.choice(["PaymentService", "DataService", "PublicInfoService"])
+            try:
+                service_instance = self.load_balancer.get_instance(service_name)
+            except Exception as e:
+                logger.error(str(e))
+
+            req = models.Request(user, service_instance.name)
+            asyncio.create_task(self.process_request(req, service_instance))
             user_id += 1
             await asyncio.sleep(random.uniform(0.05, 0.2))
         logger.info("🚀 Генерация запросов завершена")
@@ -69,8 +102,8 @@ class Application:
 
     async def run(self):
         logger = context_logger.get_logger()
-        asyncio.create_task(self.redis.simulate_failure())
-        asyncio.create_task(self.postgres.simulate_failure())
+        for r in self.resources:
+            asyncio.create_task(r.simulate_failure())
         for s in self.services:
             asyncio.create_task(s.simulate_failure())
         await self.generate_requests()

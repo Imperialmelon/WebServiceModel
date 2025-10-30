@@ -3,10 +3,10 @@ import logging
 
 logger_var = contextvars.ContextVar("logger")
 
-def get_logger():
+def get_logger() -> contextvars.ContextVar:
     return logger_var.get()
 
-def setup_logger():
+def setup_logger() -> logging.Logger:
     logger = logging.getLogger("simulation")
     logger.setLevel(logging.INFO)
     handler = logging.StreamHandler()

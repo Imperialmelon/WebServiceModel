@@ -9,7 +9,7 @@ class PostgresDB(Database):
     def __init__(self, name : str = "Postgres", latency : float = 0.15, fail_prob : float = 0.03):
         super().__init__(name, latency, fail_prob, True)
 
-    async def get(self, sql: str):
+    async def get(self, sql: str) -> dict:
         if not self.available:
             raise Exception(f"{self.name} недоступен")
         await asyncio.sleep(random.uniform(self.latency, 2 * self.latency))
