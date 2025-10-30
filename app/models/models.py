@@ -12,13 +12,18 @@ class Request:
         self.user: User = user
         self.service_name: str = service_name
         self.start_time: float = time.time()
-        self.end_time = None
-        self.success = None
+        self.end_time: float | None = None
+        self.success: bool | None = None
+
         self.tcp_time: float = 0.0
         self.tls_time: float = 0.0
 
+        self.db_time: float = 0.0
+        self.cache_time: float = 0.0
+        self.processing_time: float = 0.0
+        self.network_latency: float = 0.0
+
     @property
     def duration(self) -> float:
-        if self.end_time is None:
-            return 0.0
-        return self.end_time - self.start_time
+        """Общее время обработки запроса"""
+        return (self.end_time or time.time()) - self.start_time

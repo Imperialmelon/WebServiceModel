@@ -9,6 +9,7 @@ class Redis(Database):
         super().__init__(name, latency, fail_prob, True)
 
     async def get(self, key) -> str | None:
+        """Моделирование получение данных"""
         if not self.available:
             raise Exception(f"{self.name} недоступен")
         await asyncio.sleep(random.uniform(self.latency, 2 * self.latency))
@@ -18,6 +19,7 @@ class Redis(Database):
         return "cached_value" if hit else None
 
     async def simulate_failure(self):
+        """Моделирование недоступности бд"""
         logger = context_logger.get_logger()
         while True:
             await asyncio.sleep(random.uniform(20, 40))

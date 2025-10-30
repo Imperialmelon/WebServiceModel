@@ -26,13 +26,16 @@ class Service:
         self.requires_auth = requires_auth
 
     async def tcp_handshake(self):
+        """TCP handshake"""
         await asyncio.sleep(random.uniform(0.01, 0.03))
 
     async def tls_handshake(self):
+        """TLS handshake"""
         await asyncio.sleep(random.uniform(0.02, 0.05))
 
     @auth.auth_check
     async def handle(self, request: models.Request):
+        """Обработка запроса"""
         logger = context_logger.get_logger()
         user = request.user
 
@@ -63,6 +66,7 @@ class Service:
         return "ok"
 
     async def simulate_failure(self):
+        """Моделирование недоступности сервиса"""
         logger = context_logger.get_logger()
         while True:
             await asyncio.sleep(random.uniform(15, 40))

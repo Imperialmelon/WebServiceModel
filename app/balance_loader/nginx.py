@@ -11,12 +11,14 @@ class Nginx:
                       service_name: str,
                       service_instances: list[service.Service],
                       weights: list[int] = None):
+        """Добавление инстанса сервиса"""
         if not weights:
             weights = [1] * len(service_instances)
         self.instances[service_name] = list(
             zip(service_instances, cycle(weights)))
 
     def get_instance(self, service_name: str) -> service.Service:
+        """Получение инстанса сервиса"""
         available = [
             (instance, weight) for instance, weight in self.instances.get(
                 service_name, []) if instance.available]

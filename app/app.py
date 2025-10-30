@@ -4,7 +4,6 @@ import time
 import matplotlib.pyplot as plt
 from .logger import logger as context_logger
 from .metrics import metrics
-from .store import store
 from .services import service
 from .services.auth_service import auth_service
 from app.store.database.postgres import postgres
@@ -15,7 +14,7 @@ from .models import models
 
 class Application:
     def __init__(self):
-        self.duration = 60
+        self.duration = 15
         self.metrics_collector = metrics.MetricsCollector()
         self.auth_service = auth_service.AuthService(
             "AuthService", db=redis.Redis(
@@ -67,6 +66,7 @@ class Application:
                 self.resources.append(s.cache)
 
     async def generate_requests(self):
+        """Генерация запросов"""
         users = []
         user_id = 0
         start_time = time.time()
@@ -100,12 +100,13 @@ class Application:
             asyncio.create_task(self.process_request(req, service_instance))
             user_id += 1
             await asyncio.sleep(random.uniform(0.05, 0.2))
-        logger.info("🚀 Генерация запросов завершена")
+        logger.info("Генерация запросов завершена")
 
     async def process_request(
             self,
             request: models.Request,
             service: service.Service):
+        """Обработка запросов"""
         logger = context_logger.get_logger()
         try:
             await service.handle(request)
@@ -118,6 +119,7 @@ class Application:
             self.metrics_collector.record(request)
 
     async def run(self):
+        """Запуск приложения"""
         logger = context_logger.get_logger()
         for r in self.resources:
             asyncio.create_task(r.simulate_failure())
@@ -125,8 +127,18 @@ class Application:
             asyncio.create_task(s.simulate_failure())
         await self.generate_requests()
         logger.info("✅ Симуляция завершена")
+        summary = self.metrics_collector.get_service_summary()
+        logger.info("📊 Итоги по сервисам:")
+        for name, stats in summary.items():
+            logger.info(
+                f"{name}: OK={stats['success']} ERR={stats['error']} "
+                f"RT={stats['avg_response']:.3f}s "
+                f"DB={stats['avg_db']:.3f}s CACHE={stats['avg_cache']:.3f}s "
+                f"TCP={stats['avg_tcp']:.3f}s TLS={stats['avg_tls']:.3f}s"
+            )
 
     def visualize(self):
+        """Визуализация"""
         times, rps, errors = self.metrics_collector.get_rps_series()
         lat_stats = self.metrics_collector.get_latency_stats()
         tcp_tls = self.metrics_collector.get_tcp_tls_avg()

@@ -5,6 +5,7 @@ from app.logger import logger as context_logger
 
 
 def auth_check(func: Callable) -> Callable:
+    """Проверка авторизации"""
     @wraps(func)
     async def wrapper(
             self,
