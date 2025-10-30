@@ -20,7 +20,8 @@ class MetricsCollector:
             self.response_times.append(duration)
             self.time_buckets[bucket]["success"] += 1
             self.by_service[request.service_name]["success"] += 1
-            self.by_service[request.service_name]["response_times"].append(duration)
+            self.by_service[request.service_name]["response_times"].append(
+                duration)
         else:
             self.errors += 1
             self.time_buckets[bucket]["error"] += 1
@@ -28,6 +29,7 @@ class MetricsCollector:
 
     def get_rps_series(self):
         times = sorted(self.time_buckets.keys())
-        rps = [self.time_buckets[t]["success"] + self.time_buckets[t]["error"] for t in times]
+        rps = [self.time_buckets[t]["success"] +
+               self.time_buckets[t]["error"] for t in times]
         errors = [self.time_buckets[t]["error"] for t in times]
         return times, rps, errors

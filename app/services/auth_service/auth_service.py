@@ -3,16 +3,26 @@ import random
 from app.services import service
 from app.models import models
 
+
 class AuthService(service.Service):
     """Отдельный сервис авторизации"""
-    def __init__(self, name, db = None, cache = None, base_latency = 0.05, fail_prob = 0.05, requires_auth = False):
+
+    def __init__(
+            self,
+            name,
+            db=None,
+            cache=None,
+            base_latency=0.05,
+            fail_prob=0.05,
+            requires_auth=False):
         super().__init__(name, db, cache, base_latency, fail_prob, requires_auth)
-        
+
     async def handle(self, request: models.Request):
         await self.tcp_handshake()
         await self.tls_handshake()
-        await asyncio.sleep(random.uniform(0.05, 0.1))
-        request.user.authorized = random.random() < 0.9
         if not request.user.authorized:
-            raise Exception("Ошибка авторизации пользователя")
-        return "authorized"
+            await asyncio.sleep(random.uniform(0.05, 0.1))
+            request.user.authorized = random.random() < 0.9
+            if not request.user.authorized:
+                raise Exception("Ошибка авторизации пользователя")
+        return

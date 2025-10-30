@@ -6,7 +6,7 @@ from ..db import Database
 
 class Redis(Database):
     def __init__(self, name="Redis", latency=0.01, fail_prob=0.02):
-       super().__init__(name, latency, fail_prob, True)
+        super().__init__(name, latency, fail_prob, True)
 
     async def get(self, key) -> str | None:
         if not self.available:

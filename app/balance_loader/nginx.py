@@ -2,20 +2,27 @@ import random
 from itertools import cycle
 from app.services import service
 
+
 class Nginx:
     def __init__(self):
-        self.instances : dict[str, list[tuple[service.Service, int]]]= {}
+        self.instances: dict[str, list[tuple[service.Service, int]]] = {}
 
-    def add_instances(self, service_name : str, service_instances : list[service.Service], weights : list[int] = None):
+    def add_instances(self,
+                      service_name: str,
+                      service_instances: list[service.Service],
+                      weights: list[int] = None):
         if not weights:
             weights = [1] * len(service_instances)
-        self.instances[service_name] = list(zip(service_instances, cycle(weights)))
+        self.instances[service_name] = list(
+            zip(service_instances, cycle(weights)))
 
-    def get_instance(self, service_name : str) -> service.Service:
-        available = [(instance, weight) for instance, weight in self.instances.get(service_name, []) if instance.available]
+    def get_instance(self, service_name: str) -> service.Service:
+        available = [
+            (instance, weight) for instance, weight in self.instances.get(
+                service_name, []) if instance.available]
         if not available:
             raise Exception(f"Все экземпляры {service_name} недоступны")
-        
+
         total_weight = sum(w for _, w in available)
         r = random.uniform(0, total_weight)
         upto = 0

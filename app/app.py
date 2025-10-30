@@ -12,11 +12,14 @@ from app.store.database.redis import redis
 from app.balance_loader import nginx
 from .models import models
 
+
 class Application:
     def __init__(self):
         self.duration = 60
         self.metrics_collector = metrics.MetricsCollector()
-        self.auth_service = auth_service.AuthService("AuthService", db = redis.Redis(name="AuthRedis"), base_latency=0.05)
+        self.auth_service = auth_service.AuthService(
+            "AuthService", db=redis.Redis(
+                name="AuthRedis"), base_latency=0.05)
         self.load_balancer = nginx.Nginx()
 
         payment_instances = [
@@ -25,7 +28,7 @@ class Application:
                 db=postgres.PostgresDB(name=f"PaymentPostgres{i}"),
                 base_latency=0.1,
                 requires_auth=True
-            ) for i in range(3)  
+            ) for i in range(3)
         ]
         data_instances = [
             service.Service(
@@ -34,7 +37,7 @@ class Application:
                 cache=redis.Redis(name=f"CacheRedis{i}"),
                 base_latency=0.07,
                 requires_auth=True
-            ) for i in range(2) 
+            ) for i in range(2)
         ]
         public_instances = [
             service.Service(
@@ -47,12 +50,15 @@ class Application:
 
         weights = [7, 3]
 
-        self.load_balancer.add_instances("PaymentService", payment_instances, weights)
-        self.load_balancer.add_instances("DataService", data_instances, weights)
-        self.load_balancer.add_instances("PublicInfoService", public_instances, weights)
-        
+        self.load_balancer.add_instances(
+            "PaymentService", payment_instances, weights)
+        self.load_balancer.add_instances(
+            "DataService", data_instances, weights)
+        self.load_balancer.add_instances(
+            "PublicInfoService", public_instances, weights)
 
-        self.services = [self.auth_service] + payment_instances + data_instances + public_instances
+        self.services = [self.auth_service] + \
+            payment_instances + data_instances + public_instances
         self.resources = []
         for s in self.services:
             if hasattr(s, 'db') and s.db is not None:
@@ -61,12 +67,17 @@ class Application:
                 self.resources.append(s.cache)
 
     async def generate_requests(self):
+        users = []
         user_id = 0
         start_time = time.time()
         logger = context_logger.get_logger()
 
         while time.time() - start_time < self.duration:
-            user = models.User(user_id)
+            if random.random() <= 0.5 and users:
+                user = random.choice(users)
+            else:
+                user = models.User(user_id)
+                users.append(user)
             auth_req = models.Request(user, "AuthService")
             try:
                 await self.auth_service.handle(auth_req)
@@ -77,9 +88,11 @@ class Application:
                 auth_req.end_time = time.time()
                 self.metrics_collector.record(auth_req)
 
-            service_name = random.choice(["PaymentService", "DataService", "PublicInfoService"])
+            service_name = random.choice(
+                ["PaymentService", "DataService", "PublicInfoService"])
             try:
-                service_instance = self.load_balancer.get_instance(service_name)
+                service_instance = self.load_balancer.get_instance(
+                    service_name)
             except Exception as e:
                 logger.error(str(e))
 
@@ -89,7 +102,10 @@ class Application:
             await asyncio.sleep(random.uniform(0.05, 0.2))
         logger.info("🚀 Генерация запросов завершена")
 
-    async def process_request(self, request : models.Request, service : service.Service):
+    async def process_request(
+            self,
+            request: models.Request,
+            service: service.Service):
         logger = context_logger.get_logger()
         try:
             await service.handle(request)
@@ -100,7 +116,6 @@ class Application:
         finally:
             request.end_time = time.time()
             self.metrics_collector.record(request)
-    
 
     async def run(self):
         logger = context_logger.get_logger()

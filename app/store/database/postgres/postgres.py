@@ -4,9 +4,12 @@ from app.logger import logger as context_logger
 from ..db import Database
 
 
-
 class PostgresDB(Database):
-    def __init__(self, name : str = "Postgres", latency : float = 0.15, fail_prob : float = 0.03):
+    def __init__(
+            self,
+            name: str = "Postgres",
+            latency: float = 0.15,
+            fail_prob: float = 0.03):
         super().__init__(name, latency, fail_prob, True)
 
     async def get(self, sql: str) -> dict:

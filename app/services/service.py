@@ -4,9 +4,18 @@ from app.logger import logger as context_logger
 from app.store.database import db
 from app.store.database.redis import redis
 from app.models import models
+from app.utils import auth
+
 
 class Service:
-    def __init__(self, name: str, db : db.Database = None, cache : redis.Redis = None, base_latency : float = 0.05, fail_prob : float = 0.05, requires_auth : bool = False):
+    def __init__(
+            self,
+            name: str,
+            db: db.Database = None,
+            cache: redis.Redis = None,
+            base_latency: float = 0.05,
+            fail_prob: float = 0.05,
+            requires_auth: bool = False):
         self.name = name
         self.db = db
         self.cache = cache
@@ -17,10 +26,11 @@ class Service:
 
     async def tcp_handshake(self):
         await asyncio.sleep(random.uniform(0.01, 0.03))
-    
+
     async def tls_handshake(self):
         await asyncio.sleep(random.uniform(0.02, 0.05))
 
+    @auth.auth_check
     async def handle(self, request: models.Request):
         logger = context_logger.get_logger()
         user = request.user
@@ -30,10 +40,6 @@ class Service:
 
         if not self.available:
             raise Exception(f"Service {self.name} недоступен")
-
-
-        if self.requires_auth and not user.authorized:
-            raise Exception(f"Пользователь {user.id} не авторизован для {self.name}")
 
         await asyncio.sleep(random.uniform(self.base_latency, 2 * self.base_latency))
         if random.random() < self.fail_prob:
@@ -46,7 +52,7 @@ class Service:
         elif self.db:
             await self.db.get("data to get")
 
-        logger.debug(f"✅ {self.name} обработал запрос {user.id}")
+        logger.info(f"✅ {self.name} обработал запрос {user.id}")
         return "ok"
 
     async def simulate_failure(self):
