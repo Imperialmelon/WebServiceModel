@@ -45,9 +45,11 @@ class Application:
             ) for i in range(2)
         ]
 
-        self.load_balancer.add_instances("PaymentService", payment_instances)
-        self.load_balancer.add_instances("DataService", data_instances)
-        self.load_balancer.add_instances("PublicInfoService", public_instances)
+        weights = [7, 3]
+
+        self.load_balancer.add_instances("PaymentService", payment_instances, weights)
+        self.load_balancer.add_instances("DataService", data_instances, weights)
+        self.load_balancer.add_instances("PublicInfoService", public_instances, weights)
         
 
         self.services = [self.auth_service] + payment_instances + data_instances + public_instances
