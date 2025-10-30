@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 from app.logger import logger as context_logger
 from app.store.database import db
 from app.store.database.redis import redis
@@ -35,8 +36,14 @@ class Service:
         logger = context_logger.get_logger()
         user = request.user
 
+        start_tcp = time.time()
         await self.tcp_handshake()
+        tcp_time = time.time() - start_tcp
+        start_tls = time.time()
         await self.tls_handshake()
+        tls_time = time.time() - start_tls
+        request.tcp_time = tcp_time
+        request.tls_time = tls_time
 
         if not self.available:
             raise Exception(f"Service {self.name} недоступен")

@@ -128,20 +128,29 @@ class Application:
 
     def visualize(self):
         times, rps, errors = self.metrics_collector.get_rps_series()
+        lat_stats = self.metrics_collector.get_latency_stats()
+        tcp_tls = self.metrics_collector.get_tcp_tls_avg()
 
-        plt.figure(figsize=(10, 6))
-        plt.subplot(2, 1, 1)
+        plt.figure(figsize=(12, 8))
+
+        plt.subplot(3, 1, 1)
         plt.plot(times, rps, label="RPS")
         plt.plot(times, errors, label="Ошибки", color="red")
         plt.title("Запросы и ошибки во времени")
-        plt.xlabel("Время (сек)")
-        plt.ylabel("Количество")
         plt.legend()
 
-        plt.subplot(2, 1, 2)
+        plt.subplot(3, 1, 2)
         plt.hist(self.metrics_collector.response_times, bins=20, alpha=0.7)
-        plt.title("Распределение времени отклика")
-        plt.xlabel("Секунды")
-        plt.ylabel("Количество")
+        plt.title(
+            f"Latency avg={
+                lat_stats['avg']:.3f}s  p95={
+                lat_stats['p95']:.3f}s  p99={
+                lat_stats['p99']:.3f}s")
+
+        plt.subplot(3, 1, 3)
+        plt.bar(["TCP avg", "TLS avg"], [tcp_tls["tcp_avg"],
+                tcp_tls["tls_avg"]], color=["blue", "orange"])
+        plt.title("Среднее время TCP / TLS соединений")
+
         plt.tight_layout()
         plt.show()

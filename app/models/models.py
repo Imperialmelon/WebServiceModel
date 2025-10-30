@@ -14,3 +14,11 @@ class Request:
         self.start_time: float = time.time()
         self.end_time = None
         self.success = None
+        self.tcp_time: float = 0.0
+        self.tls_time: float = 0.0
+
+    @property
+    def duration(self) -> float:
+        if self.end_time is None:
+            return 0.0
+        return self.end_time - self.start_time
