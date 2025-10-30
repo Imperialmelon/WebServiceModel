@@ -23,6 +23,21 @@ class MetricsCollector:
             "network_latencies": [],
         })
 
+        self.broker_metrics = {
+            "messages_sent": 0,
+            "messages_failed": 0,
+            "latencies": [],
+            "queue_sizes": []
+        }
+
+        self.infrastructure = {
+            "db_failures": 0,
+            "cache_failures": 0,
+            "service_failures": 0,
+        }
+
+        self.load_stats = defaultdict(lambda: {"active": 0, "total": 0})
+
     def record(self, request: models.Request):
         """Сбор метрик"""
         duration = request.end_time - request.start_time
@@ -89,3 +104,41 @@ class MetricsCollector:
         tcp_avg = statistics.mean(all_tcp) if all_tcp else 0
         tls_avg = statistics.mean(all_tls) if all_tls else 0
         return {"tcp_avg": tcp_avg, "tls_avg": tls_avg}
+
+    def record_load_start(self, service_name: str):
+        self.load_stats[service_name]["active"] += 1
+        self.load_stats[service_name]["total"] += 1
+
+    def record_load_end(self, service_name: str):
+        self.load_stats[service_name]["active"] = max(
+            0, self.load_stats[service_name]["active"] - 1)
+
+    def get_avg_load(self):
+        r = {s: data["total"] / max(1, len(self.time_buckets))
+             for s, data in self.load_stats.items()}
+        return {
+            s: data["total"] / max(1, len(self.time_buckets))
+            for s, data in self.load_stats.items()
+        }
+
+    def record_broker_event(self, success: bool, latency: float = 0):
+        if success:
+            self.broker_metrics["messages_sent"] += 1
+            self.broker_metrics["latencies"].append(latency)
+        else:
+            self.broker_metrics["messages_failed"] += 1
+
+    def record_broker_queue_size(self, topic: str, size: int):
+        self.broker_metrics["queue_sizes"][topic] = size
+
+    def get_broker_stats(self):
+        lat = self.broker_metrics["latencies"]
+        avg = statistics.mean(lat) if lat else 0
+        p95 = np.percentile(lat, 95) if lat else 0
+        return {
+            "avg_latency": avg,
+            "p95_latency": p95,
+            "messages_sent": self.broker_metrics["messages_sent"],
+            "messages_failed": self.broker_metrics["messages_failed"],
+            "avg_queue_size": statistics.mean(
+                self.broker_metrics["queue_sizes"].values()) if self.broker_metrics["queue_sizes"] else 0}
