@@ -27,3 +27,10 @@ class Request:
     def duration(self) -> float:
         """Общее время обработки запроса"""
         return (self.end_time or time.time()) - self.start_time
+
+
+class Message:
+    def __init__(self, topic: str, payload: dict):
+        self.topic = topic
+        self.payload = payload
+        self.timestamp = time.time()

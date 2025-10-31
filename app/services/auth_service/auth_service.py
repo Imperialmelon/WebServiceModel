@@ -10,12 +10,20 @@ class AuthService(service.Service):
     def __init__(
             self,
             name,
+            metrics_collector,
             db=None,
             cache=None,
             base_latency=0.05,
             fail_prob=0.05,
             requires_auth=False):
-        super().__init__(name, db, cache, base_latency, fail_prob, requires_auth)
+        super().__init__(
+            name,
+            metrics_collector,
+            db,
+            cache,
+            base_latency,
+            fail_prob,
+            requires_auth)
 
     async def handle(self, request: models.Request):
         await self.tcp_handshake()

@@ -12,7 +12,7 @@ def auth_check(func: Callable) -> Callable:
             request: models.Request,
             *args,
             **kwargs) -> Callable:
-        if not request.user.authorized:
+        if not request.user.authorized and self.requires_auth:
             logger = context_logger.get_logger()
             logger.warning(
                 f"🚫 Пользователь {

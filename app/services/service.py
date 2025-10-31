@@ -5,25 +5,32 @@ from app.logger import logger as context_logger
 from app.store.database import db
 from app.store.database.redis import redis
 from app.models import models
+from app.broker import rabbitmq
 from app.utils import auth
+from app.metrics import metrics
 
 
 class Service:
     def __init__(
             self,
             name: str,
+            metrics_collector: metrics.MetricsCollector,
             db: db.Database = None,
             cache: redis.Redis = None,
             base_latency: float = 0.05,
             fail_prob: float = 0.05,
-            requires_auth: bool = False):
+            requires_auth: bool = False,
+            broker: rabbitmq.RabbitMQ | None = None
+    ):
         self.name = name
         self.db = db
+        self.metrics_collector = metrics_collector
         self.cache = cache
         self.base_latency = base_latency
         self.fail_prob = fail_prob
         self.available = True
         self.requires_auth = requires_auth
+        self.broker = broker
 
     async def tcp_handshake(self):
         """TCP handshake"""
@@ -63,6 +70,13 @@ class Service:
             await self.db.get("data to get")
 
         logger.info(f"✅ {self.name} обработал запрос {user.id}")
+        if self.broker:
+            msg = models.Message(
+                topic="messages",
+                payload={
+                    "service": self.name,
+                    "user_id": request.user.id})
+            await self.broker.publish(msg)
         return "ok"
 
     async def simulate_failure(self):
@@ -72,6 +86,7 @@ class Service:
             await asyncio.sleep(random.uniform(15, 40))
             self.available = False
             logger.warning(f"⚠️ {self.name} упал")
+            self.metrics_collector.infrastructure["service_failures"] += 1
             await asyncio.sleep(random.uniform(5, 15))
             self.available = True
             logger.info(f"✅ {self.name} восстановился")
