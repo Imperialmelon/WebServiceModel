@@ -125,4 +125,4 @@
 ## 💻 Запуск модели
 
 ```bash
-python -m app.main
+python -m main.py
