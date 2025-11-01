@@ -1,3 +1,4 @@
+from enum import Enum
 import time
 
 
@@ -7,10 +8,16 @@ class User:
         self.authorized = False
 
 
+class HTTPMethod(Enum):
+    POST = "post"
+    GET = "get"
+
+
 class Request:
-    def __init__(self, user: User, service_name: str):
+    def __init__(self, user: User, service_name: str, method: HTTPMethod):
         self.user: User = user
         self.service_name: str = service_name
+        self.method: HTTPMethod = method
         self.start_time: float = time.time()
         self.end_time: float | None = None
         self.success: bool | None = None

@@ -2,6 +2,7 @@ import asyncio
 import random
 from app.services import service
 from app.models import models
+from app.store import cluster
 
 
 class AuthService(service.Service):
@@ -11,7 +12,7 @@ class AuthService(service.Service):
             self,
             name,
             metrics_collector,
-            db=None,
+            db_cluster: cluster.DBCluster,
             cache=None,
             base_latency=0.05,
             fail_prob=0.05,
@@ -19,7 +20,7 @@ class AuthService(service.Service):
         super().__init__(
             name,
             metrics_collector,
-            db,
+            db_cluster,
             cache,
             base_latency,
             fail_prob,

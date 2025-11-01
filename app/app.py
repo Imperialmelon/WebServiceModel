@@ -8,6 +8,7 @@ from .services import service
 from .services.auth_service import auth_service
 from app.store.database.postgres import postgres
 from app.store.database.redis import redis
+from app.store import cluster
 from app.balance_loader import nginx
 from app.broker import rabbitmq
 from .models import models
@@ -17,60 +18,110 @@ class Application:
     def __init__(self):
         self.duration = 50
         self.metrics_collector = metrics.MetricsCollector()
-        self.auth_service = auth_service.AuthService(
-            "AuthService",
-            db=redis.Redis(
-                name="AuthRedis",
-                metrics_collector=self.metrics_collector),
-            base_latency=0.05,
-            metrics_collector=self.metrics_collector)
         self.load_balancer = nginx.Nginx()
         self.broker = rabbitmq.RabbitMQ(
-            name="RabbitMQ", metrics_collector=self.metrics_collector)
+            "RabbitMQ", metrics_collector=self.metrics_collector)
+
+        auth_cluster = cluster.DBCluster(
+            name="AuthCluster",
+            master=redis.Redis(
+                name="AuthRedisMaster",
+                metrics_collector=self.metrics_collector),
+            replicas=[
+                redis.Redis(
+                    name="AuthRedisReplica1",
+                    metrics_collector=self.metrics_collector),
+                redis.Redis(
+                    name="AuthRedisReplica2",
+                    metrics_collector=self.metrics_collector),
+            ])
+
+        self.auth_service = auth_service.AuthService(
+            name="AuthService",
+            db_cluster=auth_cluster,
+            base_latency=0.05,
+            metrics_collector=self.metrics_collector
+        )
+
+        notification_cluster = cluster.DBCluster(
+            name="NotificationCluster",
+            master=postgres.PostgresDB(
+                name="NotifMaster",
+                metrics_collector=self.metrics_collector),
+            replicas=[
+                postgres.PostgresDB(
+                    name="NotifReplica1",
+                    metrics_collector=self.metrics_collector)])
+
         self.notification_service = service.Service(
-            "NotificationService",
+            name="NotificationService",
+            db_cluster=notification_cluster,
             base_latency=0.05,
             broker=self.broker,
-            metrics_collector=self.metrics_collector)
-        self.load_balancer.add_instances(
-            "NotificationService", [self.notification_service], [1]
+            metrics_collector=self.metrics_collector
         )
+
+        self.load_balancer.add_instances(
+            "NotificationService", [
+                self.notification_service], [1])
 
         payment_instances = [
             service.Service(
-                name="PaymentService",
-                db=postgres.PostgresDB(
-                    name=f"PaymentPostgres{i}",
-                    metrics_collector=self.metrics_collector),
+                name=f"PaymentService-{i}",
+                db_cluster=cluster.DBCluster(
+                    name=f"PaymentCluster-{i}",
+                    master=postgres.PostgresDB(
+                        name=f"PaymentMaster-{i}",
+                        metrics_collector=self.metrics_collector),
+                    replicas=[
+                        postgres.PostgresDB(
+                            name=f"PaymentReplica-{i}-1",
+                            metrics_collector=self.metrics_collector),
+                        postgres.PostgresDB(
+                            name=f"PaymentReplica-{i}-2",
+                            metrics_collector=self.metrics_collector)]),
                 base_latency=0.1,
                 requires_auth=True,
                 broker=self.broker,
                 metrics_collector=self.metrics_collector) for i in range(3)]
+
         data_instances = [
             service.Service(
-                name="DataService",
-                db=postgres.PostgresDB(
-                    name=f"DataPostgres{i}",
-                    metrics_collector=self.metrics_collector),
+                name=f"DataService-{i}",
+                db_cluster=cluster.DBCluster(
+                    name=f"DataCluster-{i}",
+                    master=postgres.PostgresDB(
+                        name=f"DataMaster-{i}",
+                        metrics_collector=self.metrics_collector),
+                    replicas=[
+                        postgres.PostgresDB(
+                            name=f"DataReplica-{i}-1",
+                            metrics_collector=self.metrics_collector)]),
                 cache=redis.Redis(
-                    name=f"CacheRedis{i}",
+                    name=f"CacheRedis-{i}",
                     metrics_collector=self.metrics_collector),
                 base_latency=0.07,
                 requires_auth=True,
                 broker=self.broker,
                 metrics_collector=self.metrics_collector) for i in range(2)]
+
         public_instances = [
             service.Service(
-                "PublicInfoService",
-                db=postgres.PostgresDB(
-                    name=f"PublicPostgres{i}",
-                    metrics_collector=self.metrics_collector),
+                name=f"PublicInfoService-{i}",
+                db_cluster=cluster.DBCluster(
+                    name=f"PublicCluster-{i}",
+                    master=postgres.PostgresDB(
+                        name=f"PublicMaster-{i}",
+                        metrics_collector=self.metrics_collector),
+                    replicas=[
+                        postgres.PostgresDB(
+                            name=f"PublicReplica-{i}-1",
+                            metrics_collector=self.metrics_collector)]),
                 base_latency=0.03,
                 requires_auth=False,
                 metrics_collector=self.metrics_collector) for i in range(2)]
 
         weights = [7, 3]
-
         self.load_balancer.add_instances(
             "PaymentService", payment_instances, weights)
         self.load_balancer.add_instances(
@@ -78,13 +129,15 @@ class Application:
         self.load_balancer.add_instances(
             "PublicInfoService", public_instances, weights)
 
-        self.services = [self.auth_service] + \
+        self.services = [self.auth_service, self.notification_service] + \
             payment_instances + data_instances + public_instances
+
         self.resources = []
         for s in self.services:
-            if hasattr(s, 'db') and s.db is not None:
-                self.resources.append(s.db)
-            if hasattr(s, 'cache') and s.cache is not None:
+            if s.db_cluster:
+                self.resources.append(s.db_cluster.master)
+                self.resources.extend(s.db_cluster.replicas)
+            if s.cache:
                 self.resources.append(s.cache)
 
     async def generate_requests(self):
@@ -100,7 +153,8 @@ class Application:
             else:
                 user = models.User(user_id)
                 users.append(user)
-            auth_req = models.Request(user, "AuthService")
+            auth_req = models.Request(
+                user, "AuthService", models.HTTPMethod.POST)
             try:
                 await self.auth_service.handle(auth_req)
                 auth_req.success = True
@@ -118,7 +172,8 @@ class Application:
             except Exception as e:
                 logger.error(str(e))
 
-            req = models.Request(user, service_instance.name)
+            method = models.HTTPMethod.GET if random.random() <= 0.5 else models.HTTPMethod.POST
+            req = models.Request(user, service_instance.name, method)
             asyncio.create_task(self.process_request(req, service_instance))
             user_id += 1
             await asyncio.sleep(random.uniform(0.05, 0.2))
@@ -164,6 +219,10 @@ class Application:
             asyncio.create_task(r.simulate_failure())
         for s in self.services:
             asyncio.create_task(s.simulate_failure())
+        for s in self.services:
+            if hasattr(s, "db_cluster") and s.db_cluster:
+                asyncio.create_task(s.db_cluster.monitor_master(interval=5.0))
+
         consume_task = asyncio.create_task(self.consume_notifications())
         await self.generate_requests()
         logger.info("✅ Симуляция завершена")
