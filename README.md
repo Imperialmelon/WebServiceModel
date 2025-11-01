@@ -144,4 +144,4 @@
 ## 💻 Запуск модели
 
 ```bash
-python -m main.py
+python -m main
