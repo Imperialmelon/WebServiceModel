@@ -3,6 +3,7 @@ import random
 import time
 from app.logger import logger as context_logger
 from app.store.database import db
+from app.store import cluster
 from app.store.database.redis import redis
 from app.models import models
 from app.broker import rabbitmq
@@ -15,7 +16,7 @@ class Service:
             self,
             name: str,
             metrics_collector: metrics.MetricsCollector,
-            db: db.Database = None,
+            db_cluster: cluster.DBCluster | None,
             cache: redis.Redis = None,
             base_latency: float = 0.05,
             fail_prob: float = 0.05,
@@ -23,7 +24,7 @@ class Service:
             broker: rabbitmq.RabbitMQ | None = None
     ):
         self.name = name
-        self.db = db
+        self.db_cluster = db_cluster
         self.metrics_collector = metrics_collector
         self.cache = cache
         self.base_latency = base_latency
@@ -62,12 +63,24 @@ class Service:
         if random.random() < self.fail_prob:
             raise Exception(f"{self.name} внутренняя ошибка")
 
-        if self.cache:
-            data = await self.cache.get("user:" + str(user.id))
-            if not data and self.db:
-                await self.db.get("data to get")
-        elif self.db:
-            await self.db.get("data to get")
+        if request.method == models.HTTPMethod.POST:
+            if self.db_cluster:
+                try:
+                    await self.db_cluster.write(f"key-{request.user.id}", f"value-{request.user.id}")
+                except Exception as e:
+                    logger.warning(
+                        f"Кластер {
+                            self.db_cluster.name} недоступен")
+
+        else:
+            if self.cache:
+                data = await self.cache.get("user:" + str(user.id))
+                if not data:
+                    if self.db_cluster:
+                        await self.db_cluster.read("data to get")
+            else:
+                if self.db_cluster:
+                    await self.db_cluster.read("data to get")
 
         logger.info(f"✅ {self.name} обработал запрос {user.id}")
         if self.broker:
