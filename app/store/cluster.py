@@ -25,12 +25,16 @@ class DBCluster:
     async def replicate(self, key: str, value: Any):
         """Имитация задержки репликации данных на слейвы."""
         await asyncio.sleep(self.replication_delay)
+        logger = context_logger.get_logger()
         for replica in self.replicas:
             if replica.available:
-                await replica.put(key, value)
+                try:
+                    await replica.put(key, value)
+                except Exception as e:
+                    logger.error(e)
 
-        logger = context_logger.get_logger()
-        logger.debug(f"🔄 Репликация ключа '{key}' завершена")
+        
+        logger.info(f"🔄 Репликация ключа '{key}' завершена")
 
     async def write(self, key: str, value: str):
         """Запись в master и репликация."""
