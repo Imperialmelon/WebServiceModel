@@ -16,7 +16,7 @@ from .models import models
 
 class Application:
     def __init__(self):
-        self.duration = 10
+        self.duration = 50
         self.metrics_collector = metrics.MetricsCollector()
         self.load_balancer = nginx.Nginx()
         self.broker = rabbitmq.RabbitMQ(

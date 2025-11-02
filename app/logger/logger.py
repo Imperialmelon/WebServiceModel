@@ -1,5 +1,6 @@
 import contextvars
 import logging
+from contextlib import asynccontextmanager
 
 logger_var = contextvars.ContextVar("logger")
 
@@ -18,3 +19,14 @@ def setup_logger() -> logging.Logger:
         "%(asctime)s [%(levelname)s] %(message)s"))
     logger.addHandler(handler)
     return logger
+
+
+@asynccontextmanager
+async def app_logger():
+    """Асинхронный менеджер контекста для логгера"""
+    logger = setup_logger()
+    token = logger_var.set(logger)
+    try:
+        yield logger
+    finally:
+        logger_var.reset(token)
