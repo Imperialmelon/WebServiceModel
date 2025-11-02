@@ -4,11 +4,9 @@ from app.logger import logger as context_logger
 
 app = Application()
 
+
 async def main():
-    logger = context_logger.setup_logger()
-    token = context_logger.logger_var.set(logger)
-    await app.run()
-    app.visualize()
-    context_logger.logger_var.reset(token)
+    async with context_logger.app_logger():
+        await app.run()
 
 asyncio.run(main())
