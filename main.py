@@ -8,7 +8,7 @@ async def main():
     logger = context_logger.setup_logger()
     token = context_logger.logger_var.set(logger)
     await app.run()
-    app.visualize()
+    # app.visualize()
     context_logger.logger_var.reset(token)
 
 asyncio.run(main())

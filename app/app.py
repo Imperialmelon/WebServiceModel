@@ -16,7 +16,7 @@ from .models import models
 
 class Application:
     def __init__(self):
-        self.duration = 50
+        self.duration = 10
         self.metrics_collector = metrics.MetricsCollector()
         self.load_balancer = nginx.Nginx()
         self.broker = rabbitmq.RabbitMQ(
@@ -215,6 +215,8 @@ class Application:
     async def run(self):
         """Запуск приложения"""
         logger = context_logger.get_logger()
+        run_coroutine = asyncio.current_task()
+        run_coroutine.add_done_callback(lambda _: self.visualize())
         for r in self.resources:
             asyncio.create_task(r.simulate_failure())
         for s in self.services:
